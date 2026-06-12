@@ -1,0 +1,27 @@
+[package]
+name = "rugc"
+version = "0.1.0"
+edition = "2021"
+authors = ["Mogir <mogir@example.com>"]
+description = "Rust Unified Geometric Cognition: deterministic geometric reasoning engine with Rust invariants"
+repository = "https://github.com/MoTechnicalities/Rust-Unified-Geometric-Cognition"
+readme = "README.md"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+sha2 = "0.10"
+thiserror = "1.0"
+rayon = "1.7"
+parking_lot = "0.12"
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[example]]
+name = "basic_reasoning"
+path = "examples/basic_reasoning.rs"
+
+[[example]]
+name = "geometric_constraint"
+path = "examples/geometric_constraint.rs"

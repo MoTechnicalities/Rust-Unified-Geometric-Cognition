@@ -1,0 +1,14 @@
+/home/mogir/Desktop/Mogir_Jason_Rofick/AI-GitHub_projects/RUGC/target/debug/deps/serde-5906efa2d43b72ec.d: /home/mogir/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /home/mogir/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /home/mogir/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /home/mogir/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /home/mogir/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /home/mogir/Desktop/Mogir_Jason_Rofick/AI-GitHub_projects/RUGC/target/debug/build/serde-3eceff10943d83fb/out/private.rs
+
+/home/mogir/Desktop/Mogir_Jason_Rofick/AI-GitHub_projects/RUGC/target/debug/deps/libserde-5906efa2d43b72ec.rlib: /home/mogir/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /home/mogir/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /home/mogir/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /home/mogir/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /home/mogir/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /home/mogir/Desktop/Mogir_Jason_Rofick/AI-GitHub_projects/RUGC/target/debug/build/serde-3eceff10943d83fb/out/private.rs
+
+/home/mogir/Desktop/Mogir_Jason_Rofick/AI-GitHub_projects/RUGC/target/debug/deps/libserde-5906efa2d43b72ec.rmeta: /home/mogir/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs /home/mogir/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs /home/mogir/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs /home/mogir/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs /home/mogir/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs /home/mogir/Desktop/Mogir_Jason_Rofick/AI-GitHub_projects/RUGC/target/debug/build/serde-3eceff10943d83fb/out/private.rs
+
+/home/mogir/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/lib.rs:
+/home/mogir/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/integer128.rs:
+/home/mogir/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/mod.rs:
+/home/mogir/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/de.rs:
+/home/mogir/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.228/src/private/ser.rs:
+/home/mogir/Desktop/Mogir_Jason_Rofick/AI-GitHub_projects/RUGC/target/debug/build/serde-3eceff10943d83fb/out/private.rs:
+
+# env-dep:OUT_DIR=/home/mogir/Desktop/Mogir_Jason_Rofick/AI-GitHub_projects/RUGC/target/debug/build/serde-3eceff10943d83fb/out
