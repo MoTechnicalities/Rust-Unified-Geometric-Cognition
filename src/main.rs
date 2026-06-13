@@ -23,4 +23,5 @@ fn main() {
     println!("  cargo run --example phase55_intent_goal");
     println!("  cargo run --example phase56_multi_goal");
     println!("  cargo run --example phase57_meta_intent");
+    println!("  cargo run --example curriculum_harness");
 }

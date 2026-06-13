@@ -82,3 +82,7 @@ path = "examples/phase56_multi_goal.rs"
 [[example]]
 name = "phase57_meta_intent"
 path = "examples/phase57_meta_intent.rs"
+
+[[example]]
+name = "curriculum_harness"
+path = "examples/curriculum_harness.rs"
