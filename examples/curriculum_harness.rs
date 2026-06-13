@@ -38,6 +38,25 @@ impl RunMode {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+enum TuningPass {
+    Canonical,
+    ConvergenceGate,
+    FlowEnergyDescent,
+    AnchorStabilization,
+}
+
+impl TuningPass {
+    fn as_str(self) -> &'static str {
+        match self {
+            TuningPass::Canonical => "canonical",
+            TuningPass::ConvergenceGate => "convergence_gate_tuning",
+            TuningPass::FlowEnergyDescent => "flow_energy_descent_sharpening",
+            TuningPass::AnchorStabilization => "anchor_stabilization_acceleration",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 struct EpisodeSpec {
     id: &'static str,
@@ -163,6 +182,47 @@ struct ExportBundle {
     comparison: ModeComparison,
 }
 
+#[derive(Debug, Clone, Serialize)]
+struct MicroExperimentGate {
+    name: String,
+    passed: bool,
+    required_max_recovery_iteration: usize,
+    observed_full_stack_recovery_iteration: usize,
+    non_speed_checks_passed: bool,
+    anti_shortcut_quality_passed: bool,
+    required_min_recovery_continuity: i64,
+    observed_full_stack_recovery_continuity: i64,
+    required_min_recovery_regions: usize,
+    observed_full_stack_recovery_regions: usize,
+    required_min_recovery_anchors: usize,
+    observed_full_stack_recovery_anchors: usize,
+    detail: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct MicroExperimentResult {
+    pass: TuningPass,
+    mode_runs: Vec<ModeRun>,
+    comparison: ModeComparison,
+    gate: MicroExperimentGate,
+    promoted: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct Phase6TuningSequence {
+    canonical_full_stack_recovery_iteration: usize,
+    experiments: Vec<MicroExperimentResult>,
+    all_gates_passed: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct FullStackQualitySnapshot {
+    recovery_iteration: usize,
+    recovery_continuity: i64,
+    recovery_regions: usize,
+    recovery_anchors: usize,
+}
+
 fn cfg() -> MultiFrameConfig {
     MultiFrameConfig {
         iterations: 12,
@@ -184,6 +244,38 @@ fn cfg() -> MultiFrameConfig {
         emergent_min_persistence: 2,
         emergent_constraint_weight: 36,
     }
+}
+
+fn cfg_for_pass(pass: TuningPass) -> MultiFrameConfig {
+    let mut cfg = cfg();
+    match pass {
+        TuningPass::Canonical => {}
+        TuningPass::ConvergenceGate => {
+            cfg.convergence_window = 1;
+            cfg.energy_delta_threshold = 1;
+            cfg.ambiguity_margin = 3000;
+        }
+        TuningPass::FlowEnergyDescent => {
+            cfg.convergence_window = 1;
+            cfg.energy_delta_threshold = 1;
+            cfg.ambiguity_margin = 3000;
+            cfg.target_energy = 350;
+            cfg.anchor_pull_strength = 6;
+            cfg.anchor_fusion_bias = 12;
+        }
+        TuningPass::AnchorStabilization => {
+            cfg.convergence_window = 1;
+            cfg.energy_delta_threshold = 1;
+            cfg.ambiguity_margin = 3000;
+            cfg.target_energy = 350;
+            cfg.anchor_pull_strength = 8;
+            cfg.anchor_fusion_bias = 12;
+            cfg.anchor_alignment_window = 16;
+            cfg.emergent_resonance_threshold = 30;
+            cfg.emergent_min_persistence = 1;
+        }
+    }
+    cfg
 }
 
 fn curriculum() -> Vec<EpisodeSpec> {
@@ -578,9 +670,16 @@ fn register_episode(mfc: &mut MultiFrameCognition, spec: &EpisodeSpec) {
     }
 }
 
-fn run_episode(mfc: &mut MultiFrameCognition, spec: &EpisodeSpec, mode: RunMode) -> EpisodeMetrics {
+fn run_episode(
+    mfc: &mut MultiFrameCognition,
+    spec: &EpisodeSpec,
+    mode: RunMode,
+    config: &MultiFrameConfig,
+) -> EpisodeMetrics {
     register_episode(mfc, spec);
-    let report = mfc.run(cfg()).expect("episode run should succeed");
+    let report = mfc
+        .run(config.clone())
+        .expect("episode run should succeed");
 
     let topo_a = compute_cognitive_topology(&report.consolidated_memory, 500)
         .expect("topology A should compute");
@@ -679,6 +778,7 @@ fn verify_learning(
     first_training: &EpisodeMetrics,
     holdout_results: &[HoldoutPairResult],
     rubric: &PassFailRubric,
+    max_iterations: usize,
 ) -> VerificationOutcome {
     let anchor_advantages: Vec<isize> = holdout_results
         .iter()
@@ -706,7 +806,7 @@ fn verify_learning(
         .collect();
     let trained_recovery_converged: Vec<usize> = holdout_results
         .iter()
-        .map(|r| r.trained_recovery.converged_iteration.unwrap_or(cfg().iterations + 1))
+        .map(|r| r.trained_recovery.converged_iteration.unwrap_or(max_iterations + 1))
         .collect();
     let recovery_consistency_advantages: Vec<i64> = holdout_results
         .iter()
@@ -822,11 +922,12 @@ fn derive_recovery_baseline(
     mode: RunMode,
     training_results: &[EpisodeMetrics],
     canonical_recovery_budget: usize,
+    max_iterations: usize,
 ) -> DiagnosticBaseline {
     let stage_d_recovery_iterations: Vec<usize> = training_results
         .iter()
         .filter(|m| m.kind == EpisodeKind::Recovery)
-        .map(|m| m.converged_iteration.unwrap_or(cfg().iterations + 1))
+        .map(|m| m.converged_iteration.unwrap_or(max_iterations + 1))
         .collect();
 
     let stage_d_recovery_median_iteration = median_usize(&stage_d_recovery_iterations);
@@ -880,10 +981,10 @@ fn print_episode(metrics: &EpisodeMetrics) {
     println!("  trace_hash={}... novelty={}", &metrics.final_trace_hash[..16], metrics.novelty_tag);
 }
 
-fn average_trained_recovery_iteration(holdouts: &[HoldoutPairResult]) -> usize {
+fn average_trained_recovery_iteration(holdouts: &[HoldoutPairResult], max_iterations: usize) -> usize {
     let values: Vec<usize> = holdouts
         .iter()
-        .map(|r| r.trained_recovery.converged_iteration.unwrap_or(cfg().iterations + 1))
+        .map(|r| r.trained_recovery.converged_iteration.unwrap_or(max_iterations + 1))
         .collect();
     average_usize(&values)
 }
@@ -896,7 +997,31 @@ fn average_trained_recovery_consistency(holdouts: &[HoldoutPairResult]) -> i64 {
     average_i64(&values)
 }
 
-fn build_mode_comparison(mode_runs: &[ModeRun]) -> ModeComparison {
+fn average_trained_recovery_continuity(holdouts: &[HoldoutPairResult]) -> i64 {
+    let values: Vec<i64> = holdouts
+        .iter()
+        .map(|r| r.trained_recovery.self_continuity_score)
+        .collect();
+    average_i64(&values)
+}
+
+fn average_trained_recovery_regions(holdouts: &[HoldoutPairResult]) -> usize {
+    let values: Vec<usize> = holdouts
+        .iter()
+        .map(|r| r.trained_recovery.topology_regions)
+        .collect();
+    average_usize(&values)
+}
+
+fn average_trained_recovery_anchors(holdouts: &[HoldoutPairResult]) -> usize {
+    let values: Vec<usize> = holdouts
+        .iter()
+        .map(|r| r.trained_recovery.active_anchors)
+        .collect();
+    average_usize(&values)
+}
+
+fn build_mode_comparison(mode_runs: &[ModeRun], max_iterations: usize) -> ModeComparison {
     let full = mode_runs
         .iter()
         .find(|r| r.mode == RunMode::FullStack)
@@ -906,8 +1031,8 @@ fn build_mode_comparison(mode_runs: &[ModeRun]) -> ModeComparison {
         .find(|r| r.mode == RunMode::NoMeta)
         .expect("no_meta run missing");
 
-    let full_avg_recovery = average_trained_recovery_iteration(&full.holdouts);
-    let no_meta_avg_recovery = average_trained_recovery_iteration(&no_meta.holdouts);
+    let full_avg_recovery = average_trained_recovery_iteration(&full.holdouts, max_iterations);
+    let no_meta_avg_recovery = average_trained_recovery_iteration(&no_meta.holdouts, max_iterations);
     let full_avg_consistency = average_trained_recovery_consistency(&full.holdouts);
     let no_meta_avg_consistency = average_trained_recovery_consistency(&no_meta.holdouts);
 
@@ -931,6 +1056,7 @@ fn build_mode_comparison(mode_runs: &[ModeRun]) -> ModeComparison {
 fn export_results(
     mode_runs: &[ModeRun],
     rubric: &PassFailRubric,
+    max_iterations: usize,
 ) -> Result<PathBuf, std::io::Error> {
     let export_dir = PathBuf::from("target/curriculum_harness");
     fs::create_dir_all(&export_dir)?;
@@ -941,7 +1067,7 @@ fn export_results(
     let bundle = ExportBundle {
         rubric: export_rubric(rubric),
         mode_runs: mode_runs.to_vec(),
-        comparison: build_mode_comparison(mode_runs),
+        comparison: build_mode_comparison(mode_runs, max_iterations),
     };
 
     let json = serde_json::to_string_pretty(&bundle).expect("bundle should serialize");
@@ -1096,14 +1222,16 @@ fn run_mode(
     mode: RunMode,
     episodes: &[EpisodeSpec],
     rubric: &PassFailRubric,
+    config: &MultiFrameConfig,
+    pass: TuningPass,
 ) -> ModeRun {
-    println!("\n=== Running mode: {} ===", mode.as_str());
+    println!("\n=== Running mode: {} | pass={} ===", mode.as_str(), pass.as_str());
 
     let mut learner = MultiFrameCognition::new();
     let mut training_results: Vec<EpisodeMetrics> = Vec::new();
 
     for spec in episodes.iter().filter(|e| e.kind != EpisodeKind::Holdout) {
-        let metrics = run_episode(&mut learner, spec, mode);
+        let metrics = run_episode(&mut learner, spec, mode, config);
         print_episode(&metrics);
         training_results.push(metrics);
     }
@@ -1114,15 +1242,15 @@ fn run_mode(
         .collect();
     let mut holdout_results: Vec<HoldoutPairResult> = Vec::new();
 
-    println!("\n--- Holdout battery ({}) ---", mode.as_str());
+    println!("\n--- Holdout battery ({}, pass={}) ---", mode.as_str(), pass.as_str());
     for holdout_spec in &holdout_specs {
-        let trained_holdout = run_episode(&mut learner, holdout_spec, mode);
+        let trained_holdout = run_episode(&mut learner, holdout_spec, mode, config);
         let recovery_spec = recovery_spec_from_holdout(holdout_spec);
-        let trained_recovery = run_episode(&mut learner, &recovery_spec, mode);
+        let trained_recovery = run_episode(&mut learner, &recovery_spec, mode, config);
 
         let mut fresh = MultiFrameCognition::new();
-        let fresh_holdout = run_episode(&mut fresh, holdout_spec, mode);
-        let fresh_recovery = run_episode(&mut fresh, &recovery_spec, mode);
+        let fresh_holdout = run_episode(&mut fresh, holdout_spec, mode, config);
+        let fresh_recovery = run_episode(&mut fresh, &recovery_spec, mode, config);
 
         println!("trained holdout:");
         print_episode(&trained_holdout);
@@ -1145,11 +1273,12 @@ fn run_mode(
     }
 
     let first_training = training_results.first().expect("at least one training episode");
-    let verification = verify_learning(first_training, &holdout_results, rubric);
+    let verification = verify_learning(first_training, &holdout_results, rubric, config.iterations);
     let diagnostic_baseline = derive_recovery_baseline(
         mode,
         &training_results,
         rubric.max_average_recovery_converged_iteration,
+        config.iterations,
     );
 
     println!("\n--- Verification ({}) ---", mode.as_str());
@@ -1176,6 +1305,202 @@ fn run_mode(
         training: training_results,
         holdouts: holdout_results,
         verification,
+    }
+}
+
+fn non_speed_checks_pass(verification: &VerificationOutcome) -> bool {
+    verification
+        .checks
+        .iter()
+        .filter(|c| c.name != "trained learner recovers within speed budget")
+        .all(|c| c.passed)
+}
+
+fn full_stack_recovery_average(mode_runs: &[ModeRun], max_iterations: usize) -> usize {
+    let full = mode_runs
+        .iter()
+        .find(|r| r.mode == RunMode::FullStack)
+        .expect("full_stack run missing");
+    average_trained_recovery_iteration(&full.holdouts, max_iterations)
+}
+
+fn full_stack_quality_snapshot(
+    mode_runs: &[ModeRun],
+    max_iterations: usize,
+) -> FullStackQualitySnapshot {
+    let full = mode_runs
+        .iter()
+        .find(|r| r.mode == RunMode::FullStack)
+        .expect("full_stack run missing");
+
+    FullStackQualitySnapshot {
+        recovery_iteration: average_trained_recovery_iteration(&full.holdouts, max_iterations),
+        recovery_continuity: average_trained_recovery_continuity(&full.holdouts),
+        recovery_regions: average_trained_recovery_regions(&full.holdouts),
+        recovery_anchors: average_trained_recovery_anchors(&full.holdouts),
+    }
+}
+
+fn run_mode_pair(
+    episodes: &[EpisodeSpec],
+    rubric: &PassFailRubric,
+    config: &MultiFrameConfig,
+    pass: TuningPass,
+) -> Vec<ModeRun> {
+    let full_stack = run_mode(RunMode::FullStack, episodes, rubric, config, pass);
+    let no_meta = run_mode(RunMode::NoMeta, episodes, rubric, config, pass);
+    vec![full_stack, no_meta]
+}
+
+fn export_phase6_tuning(sequence: &Phase6TuningSequence) -> Result<PathBuf, std::io::Error> {
+    let export_dir = PathBuf::from("target/curriculum_harness");
+    fs::create_dir_all(&export_dir)?;
+
+    let json_path = export_dir.join("phase6_tuning_summary.json");
+    let csv_path = export_dir.join("phase6_tuning_summary.csv");
+
+    let json = serde_json::to_string_pretty(sequence).expect("phase6 summary should serialize");
+    fs::write(&json_path, json)?;
+
+    let mut csv = String::from(
+        "pass,mode,avg_trained_recovery_iteration,avg_trained_recovery_self_consistency,gate_passed,promoted,required_max_recovery_iteration,observed_full_stack_recovery_iteration,non_speed_checks_passed,anti_shortcut_quality_passed,required_min_recovery_continuity,observed_full_stack_recovery_continuity,required_min_recovery_regions,observed_full_stack_recovery_regions,required_min_recovery_anchors,observed_full_stack_recovery_anchors\n",
+    );
+
+    for experiment in &sequence.experiments {
+        for mode in [RunMode::FullStack, RunMode::NoMeta] {
+            let (avg_recovery, avg_consistency) = match mode {
+                RunMode::FullStack => (
+                    experiment.comparison.full_stack_avg_recovery_iteration,
+                    experiment.comparison.full_stack_avg_recovery_self_consistency,
+                ),
+                RunMode::NoMeta => (
+                    experiment.comparison.no_meta_avg_recovery_iteration,
+                    experiment.comparison.no_meta_avg_recovery_self_consistency,
+                ),
+            };
+
+            csv.push_str(&format!(
+                "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}\n",
+                experiment.pass.as_str(),
+                mode.as_str(),
+                avg_recovery,
+                avg_consistency,
+                experiment.gate.passed,
+                experiment.promoted,
+                experiment.gate.required_max_recovery_iteration,
+                experiment.gate.observed_full_stack_recovery_iteration,
+                experiment.gate.non_speed_checks_passed,
+                experiment.gate.anti_shortcut_quality_passed,
+                experiment.gate.required_min_recovery_continuity,
+                experiment.gate.observed_full_stack_recovery_continuity,
+                experiment.gate.required_min_recovery_regions,
+                experiment.gate.observed_full_stack_recovery_regions,
+                experiment.gate.required_min_recovery_anchors,
+                experiment.gate.observed_full_stack_recovery_anchors,
+            ));
+        }
+    }
+
+    fs::write(&csv_path, csv)?;
+    Ok(export_dir)
+}
+
+fn run_phase6_tuning_sequence(
+    episodes: &[EpisodeSpec],
+    rubric: &PassFailRubric,
+    canonical_mode_runs: &[ModeRun],
+    canonical_iterations: usize,
+) -> Phase6TuningSequence {
+    let canonical_quality = full_stack_quality_snapshot(canonical_mode_runs, canonical_iterations);
+    let canonical_recovery = canonical_quality.recovery_iteration;
+    let mut promoted_chain = true;
+    let mut previous_best = canonical_recovery;
+    let mut experiments: Vec<MicroExperimentResult> = Vec::new();
+
+    for pass in [
+        TuningPass::ConvergenceGate,
+        TuningPass::FlowEnergyDescent,
+        TuningPass::AnchorStabilization,
+    ] {
+        let config = cfg_for_pass(pass);
+        let mode_runs = run_mode_pair(episodes, rubric, &config, pass);
+        let comparison = build_mode_comparison(&mode_runs, config.iterations);
+        let observed_quality = full_stack_quality_snapshot(&mode_runs, config.iterations);
+
+        let observed = observed_quality.recovery_iteration;
+        let required_max = if previous_best > rubric.max_average_recovery_converged_iteration {
+            previous_best.saturating_sub(1)
+        } else {
+            previous_best
+        };
+
+        let mut required_min_continuity = canonical_quality.recovery_continuity.saturating_sub(3);
+        let mut required_min_regions = canonical_quality.recovery_regions.saturating_sub(1);
+        let mut required_min_anchors = canonical_quality.recovery_anchors.saturating_sub(1);
+
+        // Guard against trivial "fast closure" wins that degrade structural recovery quality.
+        if observed <= 2 {
+            required_min_continuity = canonical_quality.recovery_continuity.saturating_sub(1);
+            required_min_regions = canonical_quality.recovery_regions;
+            required_min_anchors = canonical_quality.recovery_anchors;
+        }
+
+        let non_speed_ok = mode_runs
+            .iter()
+            .all(|m| non_speed_checks_pass(&m.verification));
+
+        let anti_shortcut_quality_ok = observed_quality.recovery_continuity >= required_min_continuity
+            && observed_quality.recovery_regions >= required_min_regions
+            && observed_quality.recovery_anchors >= required_min_anchors;
+
+        let gate_passed = observed <= required_max && non_speed_ok && anti_shortcut_quality_ok;
+        let promoted = promoted_chain && gate_passed;
+        promoted_chain = promoted;
+        if promoted {
+            previous_best = observed;
+        }
+
+        let gate = MicroExperimentGate {
+            name: format!("{} gate", pass.as_str()),
+            passed: gate_passed,
+            required_max_recovery_iteration: required_max,
+            observed_full_stack_recovery_iteration: observed,
+            non_speed_checks_passed: non_speed_ok,
+            anti_shortcut_quality_passed: anti_shortcut_quality_ok,
+            required_min_recovery_continuity: required_min_continuity,
+            observed_full_stack_recovery_continuity: observed_quality.recovery_continuity,
+            required_min_recovery_regions: required_min_regions,
+            observed_full_stack_recovery_regions: observed_quality.recovery_regions,
+            required_min_recovery_anchors: required_min_anchors,
+            observed_full_stack_recovery_anchors: observed_quality.recovery_anchors,
+            detail: format!(
+                "observed={} required<= {} non_speed_checks_passed={} anti_shortcut_quality_passed={} continuity={}/{} regions={}/{} anchors={}/{}",
+                observed,
+                required_max,
+                non_speed_ok,
+                anti_shortcut_quality_ok,
+                observed_quality.recovery_continuity,
+                required_min_continuity,
+                observed_quality.recovery_regions,
+                required_min_regions,
+                observed_quality.recovery_anchors,
+                required_min_anchors,
+            ),
+        };
+
+        experiments.push(MicroExperimentResult {
+            pass,
+            mode_runs,
+            comparison,
+            gate,
+            promoted,
+        });
+    }
+
+    Phase6TuningSequence {
+        canonical_full_stack_recovery_iteration: canonical_recovery,
+        all_gates_passed: experiments.iter().all(|e| e.gate.passed && e.promoted),
+        experiments,
     }
 }
 
@@ -1206,11 +1531,24 @@ fn main() {
         min_average_recovery_consistency_advantage: 0,
     };
 
-    let full_stack = run_mode(RunMode::FullStack, &episodes, &rubric);
-    let no_meta = run_mode(RunMode::NoMeta, &episodes, &rubric);
+    let canonical_config = cfg_for_pass(TuningPass::Canonical);
+    let full_stack = run_mode(
+        RunMode::FullStack,
+        &episodes,
+        &rubric,
+        &canonical_config,
+        TuningPass::Canonical,
+    );
+    let no_meta = run_mode(
+        RunMode::NoMeta,
+        &episodes,
+        &rubric,
+        &canonical_config,
+        TuningPass::Canonical,
+    );
     let mode_runs = vec![full_stack, no_meta];
 
-    let comparison = build_mode_comparison(&mode_runs);
+    let comparison = build_mode_comparison(&mode_runs, canonical_config.iterations);
     println!("\n--- Mode Comparison ---");
     println!(
         "full_stack avg trained_recovery conv={} self_consistency={}",
@@ -1224,11 +1562,43 @@ fn main() {
     );
     println!("interpretation: {}", comparison.interpretation);
 
-    let export_dir = export_results(&mode_runs, &rubric).expect("should export JSON/CSV results");
+    let export_dir = export_results(&mode_runs, &rubric, canonical_config.iterations)
+        .expect("should export JSON/CSV results");
     println!("\nExports written to {}", export_dir.display());
+
+    let sequence = run_phase6_tuning_sequence(
+        &episodes,
+        &rubric,
+        &mode_runs,
+        canonical_config.iterations,
+    );
+
+    println!("\n--- Phase 6 Tuning Sequence ---");
+    println!(
+        "baseline full_stack recovery iteration={}",
+        sequence.canonical_full_stack_recovery_iteration
+    );
+    for experiment in &sequence.experiments {
+        println!(
+            "pass={} gate={} promoted={} detail={}",
+            experiment.pass.as_str(),
+            if experiment.gate.passed { "PASS" } else { "FAIL" },
+            experiment.promoted,
+            experiment.gate.detail,
+        );
+        println!(
+            "  full_stack avg recovery={} | no_meta avg recovery={}",
+            experiment.comparison.full_stack_avg_recovery_iteration,
+            experiment.comparison.no_meta_avg_recovery_iteration,
+        );
+    }
+
+    let phase6_export_dir =
+        export_phase6_tuning(&sequence).expect("should export phase6 tuning summary");
+    println!("Phase 6 tuning summary written to {}", phase6_export_dir.display());
     println!();
 
-    let all_passed = mode_runs.iter().all(|m| m.verification.passed);
+    let all_passed = mode_runs.iter().all(|m| m.verification.passed) && sequence.all_gates_passed;
     if all_passed {
         println!("LEARNING_VERIFIED");
     } else {
