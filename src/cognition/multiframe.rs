@@ -1823,6 +1823,208 @@ pub fn compute_cognitive_flow_field(
     })
 }
 
+// ─── Phase 5.4: Cognitive Energy & Action Selection ─────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StabilityEnergy {
+    pub region_id: String,
+    pub potential: i64,
+    /// Positive = low energy well; negative = high energy barrier
+    pub well_depth: i64,
+    /// How "sticky" the region is
+    pub attraction_strength: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EnergyGradient {
+    pub source_region: String,
+    pub target_region: String,
+    /// Positive = downhill (favorable); negative = uphill (costly)
+    pub gradient: i64,
+    pub traversal_cost: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CognitivePotentialField {
+    pub stability_energies: Vec<StabilityEnergy>,
+    pub gradients: Vec<EnergyGradient>,
+    pub global_minimum_region: String,
+    pub global_minimum_energy: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ActionSelectionPolicy {
+    pub preferred_trajectory: Vec<String>,
+    pub energy_cost: i64,
+    pub stability_gain: i64,
+    pub confidence: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EnergyMinimizingTrajectory {
+    pub actions: Vec<ActionSelectionPolicy>,
+    pub total_energy_cost: i64,
+    pub convergent_outcome: bool,
+    pub canonical_hash: String,
+}
+
+pub fn compute_cognitive_potential_field(
+    flow_field: &CognitiveFlowField,
+) -> Result<CognitivePotentialField, InvariantViolation> {
+    // Energy assignment: persistence → potential inversion (high persistence = low energy)
+    let mut stability_energies: Vec<StabilityEnergy> = flow_field
+        .region_vectors
+        .iter()
+        .map(|rv| {
+            // High persistence → low potential; low persistence → high potential
+            let potential = 1000 - rv.persistence_score;
+            let well_depth = if rv.is_attractor {
+                rv.persistence_score as i64 * 2
+            } else {
+                -potential
+            };
+            let attraction_strength = if rv.is_attractor {
+                (1000 - potential).max(100)
+            } else {
+                (potential - 500).max(0)
+            };
+            StabilityEnergy {
+                region_id: rv.region_id.clone(),
+                potential,
+                well_depth,
+                attraction_strength,
+            }
+        })
+        .collect();
+    stability_energies.sort_by_key(|e| e.potential);
+
+    // Build directed gradient map for all region pairs.
+    // Gradient = source potential - target potential.
+    // Positive means moving source -> target is downhill (energy minimizing).
+    let mut gradients: Vec<EnergyGradient> = Vec::new();
+    for i in 0..stability_energies.len() {
+        for j in 0..stability_energies.len() {
+            if i == j {
+                continue;
+            }
+            let energy_delta =
+                stability_energies[i].potential as i64 - stability_energies[j].potential as i64;
+            let traversal_cost = energy_delta.abs() + 50; // Base traversal cost
+            let gradient = energy_delta;
+
+            gradients.push(EnergyGradient {
+                source_region: stability_energies[i].region_id.clone(),
+                target_region: stability_energies[j].region_id.clone(),
+                gradient,
+                traversal_cost,
+            });
+        }
+    }
+    gradients.sort_by(|a, b| b.gradient.cmp(&a.gradient));
+
+    let global_minimum_region = stability_energies
+        .first()
+        .map(|e| e.region_id.clone())
+        .unwrap_or_default();
+    let global_minimum_energy = stability_energies
+        .first()
+        .map(|e| e.potential)
+        .unwrap_or(500);
+
+    Ok(CognitivePotentialField {
+        stability_energies,
+        gradients,
+        global_minimum_region,
+        global_minimum_energy,
+    })
+}
+
+pub fn select_action(
+    potential_field: &CognitivePotentialField,
+    current_region: &str,
+) -> Result<ActionSelectionPolicy, InvariantViolation> {
+    // Find downhill paths from current region
+    let mut downhill_paths: Vec<(Vec<String>, i64, i64)> = Vec::new();
+
+    for gradient in &potential_field.gradients {
+        if gradient.source_region == current_region && gradient.gradient > 0 {
+            // Downhill
+            let stability_gain = gradient.gradient;
+            let energy_cost = gradient.traversal_cost;
+            downhill_paths.push((
+                vec![gradient.target_region.clone()],
+                energy_cost,
+                stability_gain,
+            ));
+        }
+    }
+
+    if downhill_paths.is_empty() {
+        // No downhill path; prefer staying in current region (attractor)
+        let confidence = 800;
+        return Ok(ActionSelectionPolicy {
+            preferred_trajectory: vec![current_region.to_string()],
+            energy_cost: 0,
+            stability_gain: 0,
+            confidence,
+        });
+    }
+
+    // Select the path with highest stability_gain / cost ratio
+    let (path, cost, gain) = downhill_paths
+        .into_iter()
+        .max_by_key(|(_, c, g)| (*g * 1000) / (*c + 1))
+        .unwrap();
+
+    let confidence = ((gain * 1000) / (cost + 1)).min(1000);
+
+    Ok(ActionSelectionPolicy {
+        preferred_trajectory: path,
+        energy_cost: cost,
+        stability_gain: gain,
+        confidence,
+    })
+}
+
+pub fn compute_energy_minimizing_trajectory(
+    snapshots: &[CognitiveTopology],
+    flow_field: &CognitiveFlowField,
+    anchor_basis_ids: &[String],
+) -> Result<EnergyMinimizingTrajectory, InvariantViolation> {
+    let potential_field = compute_cognitive_potential_field(flow_field)?;
+
+    let mut actions: Vec<ActionSelectionPolicy> = Vec::new();
+    let mut total_energy_cost: i64 = 0;
+
+    if !snapshots.is_empty() {
+        let current_region = potential_field
+            .stability_energies
+            .iter()
+            .max_by_key(|e| e.potential)
+            .map(|e| e.region_id.clone())
+            .unwrap_or_default();
+
+        let action = select_action(&potential_field, &current_region)?;
+        total_energy_cost = action.energy_cost;
+        actions.push(action);
+    }
+
+    let convergent_outcome = flow_field.prediction.convergent && total_energy_cost < 500;
+
+    let canonical_hash = hash_json(&(
+        &actions,
+        &potential_field.global_minimum_energy,
+        &anchor_basis_ids,
+    ))?;
+
+    Ok(EnergyMinimizingTrajectory {
+        actions,
+        total_energy_cost,
+        convergent_outcome,
+        canonical_hash,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

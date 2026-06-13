@@ -19,4 +19,5 @@ fn main() {
     println!("  cargo run --example phase51_topology");
     println!("  cargo run --example phase52_manifold_dynamics");
     println!("  cargo run --example phase53_flow_fields");
+    println!("  cargo run --example phase54_energy_action");
 }

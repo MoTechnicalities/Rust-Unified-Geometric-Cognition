@@ -218,6 +218,12 @@ Phase 5.3 cognitive flow fields demo:
 
 ```bash
 cargo run --example phase53_flow_fields
+
+Phase 5.4 cognitive energy & action selection demo:
+
+```bash
+cargo run --example phase54_energy_action
+```
 ```
 
 ### Run Tests
@@ -423,9 +429,26 @@ These gates are asserted in `tests/phase52_manifold_dynamics.rs` and run in CI.
 
 These gates are asserted in `tests/phase53_flow_fields.rs` and run in CI.
 
-### Phase 5.4: Predictive Cognitive Dynamics (Planned)
-- Trajectory extrapolation from flow vectors to predict next topology
-- Long-horizon cognitive forecasting with drift budgeting
+### Phase 5.4: Cognitive Energy & Action Selection (In Progress)
+✅ Cognitive potential field — energy landscape over topological manifold
+✅ Energy gradient computation — directional descent scores per region pair
+✅ Stability energy wells — low-energy attractors derived from region persistence
+✅ Action selection policy — policy for selecting energy-minimizing trajectories
+✅ Energy-minimizing trajectory — deterministic trajectory prediction based on energy descent
+- Long-horizon cognitive forecasting with energy budgeting
+
+### Phase 5.4 Acceptance Gates (Enforced in Tests/CI)
+- Gate AE: Energy wells form at attractor regions in stable topology
+- Gate AF: Gradient descent follows flow field predictions (gradients ordered by energy delta)
+- Gate AG: Action selection produces valid trajectory minimizing energy
+- Gate AH: External perturbation creates energy spike in potential field
+- Gate AI: Trajectory canonical hash is invariant across replays
+
+These gates are asserted in `tests/phase54_energy_action.rs` and run in CI.
+
+### Phase 5.5: Predictive Cognitive Dynamics (Planned)
+- Trajectory extrapolation from energy fields to predict next topology
+- Long-horizon cognitive forecasting with drift and energy budgeting
 - Phase 6 bridge: anticipatory reasoning and goal-directed state evolution
 
 ## Integration with UGC-Model

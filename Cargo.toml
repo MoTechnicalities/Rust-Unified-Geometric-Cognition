@@ -66,3 +66,7 @@ path = "examples/phase52_manifold_dynamics.rs"
 [[example]]
 name = "phase53_flow_fields"
 path = "examples/phase53_flow_fields.rs"
+
+[[example]]
+name = "phase54_energy_action"
+path = "examples/phase54_energy_action.rs"
