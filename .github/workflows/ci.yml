@@ -38,6 +38,9 @@ jobs:
       - name: Enforce Phase 4.7 acceptance gates
         run: cargo test --test phase47_emergent_concepts
 
+      - name: Enforce Phase 5.0 acceptance gates
+        run: cargo test --test phase50_anchor_distance
+
       - name: Validate phase pipeline example
         run: cargo run --example phase2_pipeline --quiet
 
@@ -55,3 +58,6 @@ jobs:
 
       - name: Validate emergent concept formation demo
         run: cargo run --example phase47_emergent_concepts --quiet
+
+      - name: Validate anchor-derived relational distance demo
+        run: cargo run --example phase50_anchor_distance --quiet

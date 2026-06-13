@@ -196,6 +196,12 @@ Phase 4.7 anchor-driven emergent concept formation demo:
 cargo run --example phase47_emergent_concepts
 ```
 
+Phase 5.0 anchor-derived relational distance demo:
+
+```bash
+cargo run --example phase50_anchor_distance
+```
+
 ### Run Tests
 
 ```bash
@@ -336,6 +342,20 @@ These gates are asserted in `tests/phase47_emergent_concepts.rs` and run in CI.
 - Mechanical proof of invariant satisfaction
 - Safety properties formalized in Coq/Lean
 - Determinism certified at proof level
+
+### Phase 5.0: Anchor-Derived Relational Distance (In Progress)
+✅ First endogenous relational distance derived from anchor basis overlap and emergent concept overlap
+✅ Internal continuity and external change deltas integrated into a replay-stable distance score
+✅ Deterministic near/far ordering across baseline replay vs perturbed runs
+✅ Worker-invariant relational distance computation across parallel schedules
+- Extend scalar relational distance into higher-order endogenous manifold construction
+
+### Phase 5.0 Acceptance Gates (Enforced in Tests/CI)
+- Gate Q: Relational distance orders near/far (baseline replay is nearer than external perturbation)
+- Gate R: Relational distance is invariant across worker counts
+- Gate S: Relational distance detects externally injected change signals
+
+These gates are asserted in `tests/phase50_anchor_distance.rs` and run in CI.
 
 ### Phase 5.1: Emergent Cognitive Geometry (Planned)
 - Promote stable relational regularities into explicit geometric coordinate structures

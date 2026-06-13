@@ -50,3 +50,7 @@ path = "examples/phase46_anchor_weighted.rs"
 [[example]]
 name = "phase47_emergent_concepts"
 path = "examples/phase47_emergent_concepts.rs"
+
+[[example]]
+name = "phase50_anchor_distance"
+path = "examples/phase50_anchor_distance.rs"

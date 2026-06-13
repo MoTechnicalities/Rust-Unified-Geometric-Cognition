@@ -124,12 +124,23 @@ pub struct ConsolidatedMemory {
     pub fused_constraints: Vec<SemanticConstraint>,
     pub stable_senses: Vec<StableSense>,
     pub clusters: Vec<ConceptCluster>,
+    pub anchor_basis_ids: Vec<String>,
     pub anchor_basis_hash: String,
     pub self_continuity_score: i64,
     pub external_change_score: i64,
     pub emergent_concepts: Vec<EmergentConcept>,
     pub ontology_expansion_score: i64,
     pub artifact_hash: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AnchorRelationalDistance {
+    pub score: i64,
+    pub anchor_jaccard_distance: i64,
+    pub emergent_jaccard_distance: i64,
+    pub continuity_delta: i64,
+    pub external_delta: i64,
+    pub ontology_delta: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -507,6 +518,11 @@ impl MultiFrameCognition {
         let stable_senses = consolidate_stable_senses(&last_frame_results);
         let clusters = last_shared_field.clusters_by_subject();
         let anchor_registry = registered_anchor_registry(&self.anchor_registry, config.anchor_min_persistence);
+        let anchor_basis_ids: Vec<String> = anchor_registry
+            .anchors
+            .iter()
+            .map(|a| a.id.clone())
+            .collect();
         let emergent_concepts = materialize_emergent_concepts(
             &emergent_hits,
             &emergent_latest,
@@ -530,6 +546,7 @@ impl MultiFrameCognition {
             &last_fused_constraints,
             &stable_senses,
             &clusters,
+            &anchor_basis_ids,
             &anchor_basis_hash,
             self_continuity_score,
             external_change_score,
@@ -541,6 +558,7 @@ impl MultiFrameCognition {
             fused_constraints: last_fused_constraints,
             stable_senses,
             clusters,
+            anchor_basis_ids,
             anchor_basis_hash,
             self_continuity_score,
             external_change_score,
@@ -1173,6 +1191,57 @@ fn hash_json<T: Serialize>(value: &T) -> Result<String, InvariantViolation> {
     let mut h = Sha256::new();
     h.update(bytes);
     Ok(format!("{:x}", h.finalize()))
+}
+
+pub fn anchor_derived_relational_distance(
+    a: &ConsolidatedMemory,
+    b: &ConsolidatedMemory,
+) -> AnchorRelationalDistance {
+    let anchor_jaccard_distance = jaccard_distance_scaled(&a.anchor_basis_ids, &b.anchor_basis_ids, 1000);
+
+    let emergent_a: Vec<String> = a.emergent_concepts.iter().map(|c| c.id.clone()).collect();
+    let emergent_b: Vec<String> = b.emergent_concepts.iter().map(|c| c.id.clone()).collect();
+    let emergent_jaccard_distance = jaccard_distance_scaled(&emergent_a, &emergent_b, 1000);
+
+    let continuity_delta = (a.self_continuity_score - b.self_continuity_score)
+        .abs()
+        .min(1000);
+    let external_delta = (a.external_change_score - b.external_change_score)
+        .abs()
+        .min(1000);
+    let ontology_delta = (a.ontology_expansion_score - b.ontology_expansion_score)
+        .abs()
+        .min(1000);
+
+    let score = (
+        (anchor_jaccard_distance * 3)
+            + (emergent_jaccard_distance * 2)
+            + continuity_delta
+            + external_delta
+            + ontology_delta
+    ) / 8;
+
+    AnchorRelationalDistance {
+        score,
+        anchor_jaccard_distance,
+        emergent_jaccard_distance,
+        continuity_delta,
+        external_delta,
+        ontology_delta,
+    }
+}
+
+fn jaccard_distance_scaled(a: &[String], b: &[String], scale: i64) -> i64 {
+    let set_a: BTreeSet<String> = a.iter().cloned().collect();
+    let set_b: BTreeSet<String> = b.iter().cloned().collect();
+
+    if set_a.is_empty() && set_b.is_empty() {
+        return 0;
+    }
+
+    let intersection = set_a.intersection(&set_b).count() as i64;
+    let union = set_a.union(&set_b).count() as i64;
+    ((union - intersection) * scale.max(1)) / union.max(1)
 }
 
 #[cfg(test)]

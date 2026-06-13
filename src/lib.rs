@@ -53,7 +53,8 @@ pub mod cognition {
     pub use evaluator::ConstraintEvalEngine;
     pub use evaluator::SenseInterferenceScore;
     pub use multiframe::{
-        AnchorRegistry, ConceptAnchor, ConsolidatedMemory, EmergentConcept, FrameIterationResult,
+        anchor_derived_relational_distance, AnchorRegistry, AnchorRelationalDistance, ConceptAnchor,
+        ConsolidatedMemory, EmergentConcept, FrameIterationResult,
         MultiFrameCognition, MultiFrameConfig, MultiFrameIteration, MultiFrameReport,
         StabilizationMetrics, StableSense,
     };
@@ -80,7 +81,9 @@ pub use geom::{
     ResonanceTransform, SemanticField,
 };
 pub use cognition::{
+    anchor_derived_relational_distance,
     AnchorRegistry,
+    AnchorRelationalDistance,
     ConceptAnchor,
     ConsolidatedMemory,
     EmergentConcept,
