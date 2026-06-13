@@ -5,7 +5,7 @@ use crate::cognition::constraint::SemanticConstraint;
 use crate::cognition::node::SemanticNode;
 use crate::geom::field::{FieldPoint, SemanticField};
 use crate::geom::invariants::{ConstraintEvaluator, InvariantViolation};
-use crate::geom::mode::{ResonanceMode, ResonanceTransform};
+use crate::geom::mode::{ArithmeticMode, ResonanceMode, ResonanceTransform};
 use crate::geom::space::Coordinate3;
 use std::collections::BTreeMap;
 
@@ -59,6 +59,15 @@ impl ConstraintEvalEngine {
 
     /// First real cognitive transform: apply resonance by aggregate confidence.
     pub fn apply_resonance_transform(&self, field: &mut SemanticField, nodes: &[SemanticNode]) {
+        self.apply_resonance_transform_with_mode(field, nodes, ArithmeticMode::Exact);
+    }
+
+    pub fn apply_resonance_transform_with_mode(
+        &self,
+        field: &mut SemanticField,
+        nodes: &[SemanticNode],
+        arithmetic: ArithmeticMode,
+    ) {
         let signed_energy: i64 = nodes
             .iter()
             .map(|n| if n.polarity { n.confidence as i64 } else { -(n.confidence as i64) })
@@ -72,7 +81,7 @@ impl ConstraintEvalEngine {
             (ResonanceMode::Balance, 0)
         };
 
-        ResonanceTransform { mode, magnitude }.apply(field);
+        ResonanceTransform::new(mode, magnitude, arithmetic).apply(field);
     }
 }
 
@@ -172,5 +181,22 @@ mod tests {
         let mut field = engine.project_nodes_to_field(&nodes);
         engine.apply_resonance_transform(&mut field, &nodes);
         assert!(field.concept_count() > 0);
+    }
+
+    #[test]
+    fn bounded_mode_produces_quantized_field() {
+        let engine = ConstraintEvalEngine::new();
+        let constraints = vec![SemanticConstraint::assertion("light", "wave", true, 91)];
+        let nodes = engine.constraints_to_nodes(&constraints);
+        let mut field = engine.project_nodes_to_field(&nodes);
+
+        engine.apply_resonance_transform_with_mode(
+            &mut field,
+            &nodes,
+            ArithmeticMode::BoundedApproximate { max_error: 3 },
+        );
+
+        let intensity = field.concept("light:wave").map(|p| p.intensity).unwrap_or_default();
+        assert_eq!(intensity % 4, 0);
     }
 }

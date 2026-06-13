@@ -25,3 +25,7 @@ path = "examples/basic_reasoning.rs"
 [[example]]
 name = "geometric_constraint"
 path = "examples/geometric_constraint.rs"
+
+[[example]]
+name = "phase2_pipeline"
+path = "examples/phase2_pipeline.rs"

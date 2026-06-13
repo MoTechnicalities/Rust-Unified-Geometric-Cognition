@@ -35,7 +35,7 @@ pub mod geom {
     };
     pub use space::{Coordinate3, GeometricSpace, Metric, Scalar};
     pub use field::{FieldPoint, SemanticField};
-    pub use mode::{ResonanceMode, ResonanceTransform};
+    pub use mode::{ArithmeticMode, ResonanceMode, ResonanceTransform};
 }
 
 pub mod cognition {
@@ -66,7 +66,10 @@ pub use geom::{
     CoreInvariant, ClosureStatus, ClosureTransition, InvariantViolation,
     GeometricState, ConstraintEvaluator, ConstraintSystem,
 };
-pub use geom::{Coordinate3, FieldPoint, GeometricSpace, ResonanceMode, ResonanceTransform, SemanticField};
+pub use geom::{
+    ArithmeticMode, Coordinate3, FieldPoint, GeometricSpace, ResonanceMode, ResonanceTransform,
+    SemanticField,
+};
 pub use cognition::{
     CognitiveFrame, ConstraintEvalEngine, ConstraintKind, ConstraintStatus, ScheduledTask,
     SemanticConstraint, SemanticNode, TaskScheduler,

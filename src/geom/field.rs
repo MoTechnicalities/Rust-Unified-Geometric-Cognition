@@ -44,6 +44,15 @@ impl SemanticField {
             point.intensity += delta;
         }
     }
+
+    pub fn map_intensity<F>(&mut self, mut mapper: F)
+    where
+        F: FnMut(i64) -> i64,
+    {
+        for point in self.concept_map.values_mut() {
+            point.intensity = mapper(point.intensity);
+        }
+    }
 }
 
 impl Default for SemanticField {
