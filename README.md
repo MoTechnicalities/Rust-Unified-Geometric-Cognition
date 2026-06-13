@@ -208,7 +208,9 @@ Together they form a complete stack from geometric theory to deterministic execu
 
 ## License
 
-[Add your license here]
+Licensed under the Apache License, Version 2.0.
+
+See [LICENSE](LICENSE) or http://www.apache.org/licenses/LICENSE-2.0 for the full text.
 
 ## Contributing
 
